@@ -9,6 +9,7 @@ DISCOVER, HELLO, TOKEN and DATA.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import random
 import socket
 import sys
@@ -52,6 +53,21 @@ def local_ip() -> str:
             return socket.gethostbyname(socket.gethostname())
         except OSError:
             return "127.0.0.1"
+
+
+
+def sanitize_ip(ip: str) -> str:
+    ip = ip.strip()
+
+    if ":" in ip:
+        candidate = ip.split(":", 1)[0]
+        try:
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            pass
+
+    return ip
 
 
 def corrupt_message(message: str) -> str:
@@ -199,6 +215,7 @@ class RingNode:
 
     def add_peer(self, nickname: str, ip: str, quiet: bool = False) -> None:
         nickname = nickname.upper()
+        ip = sanitize_ip(ip)
         if not nickname or nickname == BROADCAST_NICK:
             return
 
@@ -260,6 +277,14 @@ class RingNode:
             return self.peers[successor_nick]
 
     def send_raw(self, payload: str, ip: str) -> None:
+        ip = sanitize_ip(ip)
+
+        try:
+            socket.gethostbyname(ip)
+        except socket.gaierror:
+            self.log(f"Endereco invalido ignorado: {ip}")
+            return
+
         encoded = payload.encode("utf-8")
         with self.send_lock:
             self.sock.sendto(encoded, (ip, self.port))
